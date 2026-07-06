@@ -26,6 +26,7 @@ GophKeeper - менеджер секретов с CLI-клиентом и HTTP-�
 
 Создайте пустую PostgreSQL-базу, например `gophkeeper_demo`, и запустите сервер:
 
+
 ```powershell
 $env:GOPHKEEPER_DATABASE_DSN='postgres://user:password@localhost:5432/gophkeeper_demo?sslmode=disable'
 $env:GOPHKEEPER_ACCESS_TOKEN_SECRET='12345678901234567890123456789012'
