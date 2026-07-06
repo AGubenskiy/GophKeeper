@@ -213,6 +213,7 @@ go build ./cmd/gk ./cmd/gk-server
 
 GitHub Release создается автоматически при push тега `v*`:
 
+
 ```bash
 git tag -a v0.1.0 -m "GophKeeper v0.1.0"
 git push origin v0.1.0
