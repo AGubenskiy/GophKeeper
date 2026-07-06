@@ -1,0 +1,22 @@
+# Build artifacts
+/bin/
+/dist/
+/.tools/
+/tmp/
+*.exe
+*.test
+
+# Test output
+coverage.out
+coverage.html
+
+# Local runtime files
+.env
+*.db
+*.sqlite
+*.sqlite3
+
+# Local IDE and internal working files
+/.idea/
+/doc/
+/Spec.md

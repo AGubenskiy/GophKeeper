@@ -1,0 +1,461 @@
+openapi: 3.0.3
+info:
+  title: GophKeeper API
+  version: 0.1.0
+  description: HTTP API for the GophKeeper password manager project.
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Server is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /version:
+    get:
+      summary: Build metadata
+      operationId: getVersion
+      responses:
+        "200":
+          description: Build metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResponse"
+  /api/v1/auth/params:
+    get:
+      summary: Get login KDF parameters and salts
+      operationId: getAuthParams
+      parameters:
+        - name: login
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: KDF parameters and salts for the login.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthParamsResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+  /api/v1/auth/register:
+    post:
+      summary: Register a user and create a session
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          $ref: "#/components/responses/AlreadyExists"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate and create a session
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: User authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+  /api/v1/auth/refresh:
+    post:
+      summary: Rotate a refresh token and return a new session
+      operationId: refresh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Session refreshed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+  /api/v1/auth/logout:
+    post:
+      summary: Revoke a refresh token
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Refresh token revoked.
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+  /api/v1/sync/changes:
+    get:
+      summary: Pull encrypted vault item changes
+      operationId: pullChanges
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: since_revision
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+      responses:
+        "200":
+          description: Encrypted changes after the requested revision.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangesResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/SyncUnavailable"
+  /api/v1/sync/push:
+    post:
+      summary: Push encrypted vault item mutations
+      operationId: pushChanges
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushRequest"
+      responses:
+        "200":
+          description: Applied mutations and conflicts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/SyncUnavailable"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    ValidationError:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    AlreadyExists:
+      description: Resource already exists.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    AuthUnavailable:
+      description: Auth service is not configured on this server.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    SyncUnavailable:
+      description: Sync service is not configured on this server.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+    VersionResponse:
+      type: object
+      required: [version, date, commit]
+      properties:
+        version:
+          type: string
+        date:
+          type: string
+        commit:
+          type: string
+    KDFParams:
+      type: object
+      required: [algorithm, memory_kib, iterations, parallelism, key_length]
+      properties:
+        algorithm:
+          type: string
+          enum: [argon2id]
+        memory_kib:
+          type: integer
+          format: int32
+        iterations:
+          type: integer
+          format: int32
+        parallelism:
+          type: integer
+          format: int32
+        key_length:
+          type: integer
+          format: int32
+    AuthParamsResponse:
+      type: object
+      required: [login, auth_salt, vault_salt, kdf_params]
+      properties:
+        login:
+          type: string
+        auth_salt:
+          type: string
+          format: byte
+        vault_salt:
+          type: string
+          format: byte
+        kdf_params:
+          $ref: "#/components/schemas/KDFParams"
+    RegisterRequest:
+      type: object
+      required: [login, auth_secret, client_id]
+      properties:
+        login:
+          type: string
+        auth_secret:
+          type: string
+          format: byte
+          description: Client-derived authentication secret encoded as base64.
+        client_id:
+          type: string
+    LoginRequest:
+      type: object
+      required: [login, auth_secret, client_id]
+      properties:
+        login:
+          type: string
+        auth_secret:
+          type: string
+          format: byte
+        client_id:
+          type: string
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    AuthSessionResponse:
+      type: object
+      required: [user_id, login, access_token, access_expires_at, refresh_token, refresh_expires_at]
+      properties:
+        user_id:
+          type: string
+        login:
+          type: string
+        access_token:
+          type: string
+        access_expires_at:
+          type: string
+          format: date-time
+        refresh_token:
+          type: string
+        refresh_expires_at:
+          type: string
+          format: date-time
+        auth_salt:
+          type: string
+          format: byte
+        vault_salt:
+          type: string
+          format: byte
+        kdf_params:
+          $ref: "#/components/schemas/KDFParams"
+    SyncItem:
+      type: object
+      required: [id, server_revision, encrypted_payload, payload_nonce, payload_version, updated_at]
+      properties:
+        id:
+          type: string
+        server_revision:
+          type: integer
+          format: int64
+        encrypted_payload:
+          type: string
+          format: byte
+        payload_nonce:
+          type: string
+          format: byte
+        payload_version:
+          type: integer
+          format: int32
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    PushItem:
+      type: object
+      required: [id, base_revision, encrypted_payload, payload_nonce, payload_version]
+      properties:
+        id:
+          type: string
+        base_revision:
+          type: integer
+          format: int64
+          minimum: 0
+        encrypted_payload:
+          type: string
+          format: byte
+        payload_nonce:
+          type: string
+          format: byte
+        payload_version:
+          type: integer
+          format: int32
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+    ChangesResponse:
+      type: object
+      required: [items, current_revision]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncItem"
+        current_revision:
+          type: integer
+          format: int64
+    PushRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PushItem"
+    PushResponse:
+      type: object
+      required: [applied, conflicts, current_revision]
+      properties:
+        applied:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncItem"
+        conflicts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncConflict"
+        current_revision:
+          type: integer
+          format: int64
+    SyncConflict:
+      type: object
+      required: [id, base_revision, server_revision, reason]
+      properties:
+        id:
+          type: string
+        base_revision:
+          type: integer
+          format: int64
+        server_revision:
+          type: integer
+          format: int64
+        reason:
+          type: string
+        remote:
+          $ref: "#/components/schemas/SyncItem"
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
