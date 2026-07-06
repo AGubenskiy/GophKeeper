@@ -61,6 +61,8 @@ type unlockedVault struct {
 	key     []byte
 }
 
+var maxFileItemBytes int64 = 64 << 20
+
 func newAddCommand(deps dependencies, rootOpts *rootOptions) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "add",
@@ -194,9 +196,9 @@ func newAddFileCommand(deps dependencies, rootOpts *rootOptions) *cobra.Command 
 				return errors.New("--path is required")
 			}
 
-			content, err := os.ReadFile(opts.path)
+			content, err := readFileItemContent(opts.path)
 			if err != nil {
-				return fmt.Errorf("read file: %w", err)
+				return err
 			}
 			metadata, err := parseMetadata(opts.metadata)
 			if err != nil {
@@ -649,9 +651,9 @@ func applyPayloadEdit(cmd *cobra.Command, deps dependencies, payload *vaultitem.
 		}
 	case vaultitem.KindFile:
 		if cmd.Flags().Changed("path") {
-			content, err := os.ReadFile(opts.path)
+			content, err := readFileItemContent(opts.path)
 			if err != nil {
-				return false, fmt.Errorf("read file: %w", err)
+				return false, err
 			}
 			payload.Fields[vaultitem.FieldFileName] = filepath.Base(opts.path)
 			payload.Fields[vaultitem.FieldFileDataBase64] = base64.StdEncoding.EncodeToString(content)
@@ -762,6 +764,25 @@ func resolveMediaType(path, explicit string) string {
 		return detected
 	}
 	return "application/octet-stream"
+}
+
+func readFileItemContent(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file metadata: %w", err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("read file: %s is a directory", path)
+	}
+	if info.Size() > maxFileItemBytes {
+		return nil, fmt.Errorf("file is too large: %d bytes exceeds maximum %d bytes", info.Size(), maxFileItemBytes)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+	return content, nil
 }
 
 func maskCardNumber(number string) string {

@@ -16,7 +16,7 @@ import (
 	"github.com/AGubenskiy/GophKeeper/internal/cryptoutil"
 )
 
-const maxResponseBytes = 4 << 20
+const maxResponseBytes = 128 << 20
 
 // Error describes an error returned by the GophKeeper HTTP API.
 type Error struct {

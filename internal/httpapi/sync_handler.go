@@ -81,7 +81,7 @@ func (h *SyncHandler) handlePush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request pushRequest
-	if !decodeJSONRequest(w, r, &request) {
+	if !decodeJSONRequestWithLimit(w, r, &request, maxSyncJSONBodyBytes) {
 		return
 	}
 	mutations, ok := decodeMutations(w, r, request.Items)

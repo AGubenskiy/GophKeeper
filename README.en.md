@@ -85,6 +85,7 @@ gk conflict keep-remote ITEM_ID
 ```
 
 The local client SQLite database is stored under the user's config directory by default. Use `--data-dir` for an isolated profile.
+File records support binary data up to 64 MiB per item.
 
 ## Synchronization
 

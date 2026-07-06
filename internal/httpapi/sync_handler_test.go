@@ -78,6 +78,38 @@ func TestSyncHandlerPush(t *testing.T) {
 	}
 }
 
+func TestSyncHandlerAcceptsPushBodiesOverAuthLimit(t *testing.T) {
+	largePayload := bytes.Repeat([]byte("x"), maxAuthJSONBodyBytes)
+	service := &fakeSyncService{
+		pushResult: syncsvc.PushResult{CurrentRevision: 1},
+	}
+	mux := http.NewServeMux()
+	NewSyncHandler(service, fakeVerifier{principal: tokens.Principal{UserID: "user-1", ClientID: "client-1"}}).RegisterRoutes(mux)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/sync/push", jsonBody(t, pushRequest{
+		Items: []pushItemRequest{
+			{
+				ID:               "item-1",
+				BaseRevision:     0,
+				EncryptedPayload: base64.StdEncoding.EncodeToString(largePayload),
+				PayloadNonce:     base64.StdEncoding.EncodeToString([]byte("nonce")),
+				PayloadVersion:   1,
+			},
+		},
+	}))
+	request.Header.Set(headerContentType, contentTypeApplicationJSON)
+	request.Header.Set("Authorization", "Bearer access-token")
+	mux.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if len(service.mutations) != 1 || len(service.mutations[0].EncryptedPayload) != len(largePayload) {
+		t.Fatalf("mutation payload length = %d, want %d", len(service.mutations[0].EncryptedPayload), len(largePayload))
+	}
+}
+
 func TestSyncHandlerUnavailableAndInvalidRequest(t *testing.T) {
 	mux := http.NewServeMux()
 	NewSyncHandler(nil, nil).RegisterRoutes(mux)
@@ -135,7 +167,7 @@ type fakeSyncService struct {
 	mutations  []syncsvc.Mutation
 }
 
-func (f *fakeSyncService) Pull(_ context.Context, userID string, sinceRevision int64, limit int) (syncsvc.Changes, error) {
+func (f *fakeSyncService) Pull(_ context.Context, userID string, sinceRevision int64, _ int) (syncsvc.Changes, error) {
 	f.pullUserID = userID
 	f.pullSince = sinceRevision
 	return f.changes, nil

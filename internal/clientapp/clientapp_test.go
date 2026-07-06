@@ -322,6 +322,29 @@ func TestAddAndShowTextCardAndFileItems(t *testing.T) {
 	}
 }
 
+func TestAddFileRejectsTooLargeFile(t *testing.T) {
+	deps, _, _, _, stderr := newTestDependencies()
+	oldMax := maxFileItemBytes
+	maxFileItemBytes = 4
+	defer func() {
+		maxFileItemBytes = oldMax
+	}()
+
+	filePath := filepath.Join(t.TempDir(), "large.bin")
+	if err := os.WriteFile(filePath, []byte("12345"), 0o600); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	code := run([]string{"add", "file", "--title", "Large", "--path", filePath}, deps)
+
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "file is too large") {
+		t.Fatalf("stderr = %q, want file size error", stderr.String())
+	}
+}
+
 func TestSyncPushesDirtyItemsPullsChangesAndUpdatesRevision(t *testing.T) {
 	deps, store, api, stdout, stderr := newTestDependencies()
 	store.profile = testProfile(t)
