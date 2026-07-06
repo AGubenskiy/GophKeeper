@@ -1,6 +1,7 @@
 # Build artifacts
 /bin/
 /dist/
+/release/
 /.tools/
 /tmp/
 *.exe

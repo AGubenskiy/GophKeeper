@@ -204,6 +204,21 @@ Build release artifacts:
 
 The script builds `gk` and `gk-server` for Windows amd64, Linux amd64, macOS amd64, and macOS arm64, injects build metadata, and writes SHA256 checksums to `dist/checksums.txt`.
 
+Package release artifacts locally:
+
+```powershell
+.\scripts\package-release.ps1 -Version v0.1.0 -DistDir dist -OutDir release -Clean
+```
+
+GitHub Release is created automatically when a `v*` tag is pushed:
+
+```bash
+git tag -a v0.1.0 -m "GophKeeper v0.1.0"
+git push origin v0.1.0
+```
+
+The workflow runs the quality gate, builds binaries, packages Windows/Linux/macOS archives, and publishes the release with `checksums.txt`.
+
 Check build metadata:
 
 ```bash

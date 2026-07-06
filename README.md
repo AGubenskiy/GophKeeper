@@ -204,6 +204,21 @@ go build ./cmd/gk ./cmd/gk-server
 
 Скрипт собирает `gk` и `gk-server` для Windows amd64, Linux amd64, macOS amd64 и macOS arm64, добавляет build metadata и пишет SHA256 checksums в `dist/checksums.txt`.
 
+Упаковать release artifacts локально:
+
+```powershell
+.\scripts\package-release.ps1 -Version v0.1.0 -DistDir dist -OutDir release -Clean
+```
+
+GitHub Release создается автоматически при push тега `v*`:
+
+```bash
+git tag -a v0.1.0 -m "GophKeeper v0.1.0"
+git push origin v0.1.0
+```
+
+Workflow запускает quality gate, собирает бинарники, упаковывает архивы для Windows/Linux/macOS и публикует release с `checksums.txt`.
+
 Проверить build metadata:
 
 ```bash
