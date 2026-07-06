@@ -24,6 +24,10 @@ const (
 	EnvServerLogLevel = "GOPHKEEPER_SERVER_LOG_LEVEL"
 	// EnvServerShutdownTimeout overrides the graceful shutdown timeout.
 	EnvServerShutdownTimeout = "GOPHKEEPER_SERVER_SHUTDOWN_TIMEOUT"
+	// EnvTLSCertFile overrides the TLS certificate file path.
+	EnvTLSCertFile = "GOPHKEEPER_TLS_CERT_FILE"
+	// EnvTLSKeyFile overrides the TLS private key file path.
+	EnvTLSKeyFile = "GOPHKEEPER_TLS_KEY_FILE"
 )
 
 const (
@@ -51,6 +55,8 @@ type Server struct {
 	Address           string
 	LogLevel          string
 	ShutdownTimeout   time.Duration
+	TLSCertFile       string
+	TLSKeyFile        string
 }
 
 // DefaultServer returns default server settings.
@@ -81,6 +87,8 @@ func ParseServer(args []string, lookup EnvLookup) (Server, error) {
 	logLevel := fs.String("log-level", defaults.LogLevel, "log level: debug, info, warn, or error")
 	refreshTokenTTL := fs.Duration("refresh-token-ttl", defaults.RefreshTokenTTL, "refresh token lifetime")
 	shutdownTimeout := fs.Duration("shutdown-timeout", defaults.ShutdownTimeout, "graceful shutdown timeout")
+	tlsCertFile := fs.String("tls-cert-file", defaults.TLSCertFile, "TLS certificate file")
+	tlsKeyFile := fs.String("tls-key-file", defaults.TLSKeyFile, "TLS private key file")
 
 	if err := fs.Parse(args); err != nil {
 		return Server{}, err
@@ -97,6 +105,8 @@ func ParseServer(args []string, lookup EnvLookup) (Server, error) {
 		Address:           *address,
 		LogLevel:          *logLevel,
 		ShutdownTimeout:   *shutdownTimeout,
+		TLSCertFile:       *tlsCertFile,
+		TLSKeyFile:        *tlsKeyFile,
 	}
 
 	if value, ok := lookupNonEmpty(lookup, EnvAccessTokenSecret); ok {
@@ -132,6 +142,14 @@ func ParseServer(args []string, lookup EnvLookup) (Server, error) {
 		}
 		cfg.ShutdownTimeout = duration
 	}
+	if value, ok := lookupNonEmpty(lookup, EnvTLSCertFile); ok {
+		cfg.TLSCertFile = value
+	}
+	if value, ok := lookupNonEmpty(lookup, EnvTLSKeyFile); ok {
+		cfg.TLSKeyFile = value
+	}
+	cfg.TLSCertFile = strings.TrimSpace(cfg.TLSCertFile)
+	cfg.TLSKeyFile = strings.TrimSpace(cfg.TLSKeyFile)
 
 	if err := cfg.Validate(); err != nil {
 		return Server{}, err
@@ -152,6 +170,9 @@ func (c Server) Validate() error {
 	}
 	if c.ShutdownTimeout <= 0 {
 		return errors.New("shutdown timeout must be positive")
+	}
+	if (strings.TrimSpace(c.TLSCertFile) == "") != (strings.TrimSpace(c.TLSKeyFile) == "") {
+		return errors.New("tls cert file and tls key file must be provided together")
 	}
 	return nil
 }

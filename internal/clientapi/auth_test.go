@@ -113,6 +113,18 @@ func TestNewRejectsInvalidServerURL(t *testing.T) {
 	if _, err := New("localhost:8080", nil); err == nil {
 		t.Fatal("New returned nil error for URL without scheme")
 	}
+	if _, err := New("ftp://localhost:8080", nil); err == nil {
+		t.Fatal("New returned nil error for unsupported scheme")
+	}
+	if _, err := New("http://server.local", nil); err == nil {
+		t.Fatal("New returned nil error for non-local HTTP URL")
+	}
+	if _, err := New("http://localhost:8080", nil); err != nil {
+		t.Fatalf("New rejected localhost HTTP URL: %v", err)
+	}
+	if _, err := New("https://server.local", nil); err != nil {
+		t.Fatalf("New rejected HTTPS URL: %v", err)
+	}
 }
 
 func writeTestSession(t *testing.T, w http.ResponseWriter, status int) {

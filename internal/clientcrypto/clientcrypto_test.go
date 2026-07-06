@@ -54,6 +54,12 @@ func TestDeriveAuthSecretValidatesInput(t *testing.T) {
 	if _, err := DeriveAuthSecret([]byte("password"), "http://localhost:8080", " "); err == nil {
 		t.Fatal("DeriveAuthSecret returned nil error for empty login")
 	}
+	if _, err := DeriveAuthSecret([]byte("password"), "http://server.local", "alice"); err == nil {
+		t.Fatal("DeriveAuthSecret returned nil error for non-local HTTP URL")
+	}
+	if _, err := DeriveAuthSecret([]byte("password"), "https://server.local", "alice"); err != nil {
+		t.Fatalf("DeriveAuthSecret rejected HTTPS URL: %v", err)
+	}
 }
 
 func TestDeriveVaultKeyDeterministicAndSeparated(t *testing.T) {

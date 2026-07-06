@@ -143,6 +143,8 @@ Flags:
 --refresh-token-ttl
 --log-level
 --shutdown-timeout
+--tls-cert-file
+--tls-key-file
 ```
 
 Environment variables:
@@ -155,9 +157,12 @@ GOPHKEEPER_ACCESS_TOKEN_TTL
 GOPHKEEPER_REFRESH_TOKEN_TTL
 GOPHKEEPER_SERVER_LOG_LEVEL
 GOPHKEEPER_SERVER_SHUTDOWN_TIMEOUT
+GOPHKEEPER_TLS_CERT_FILE
+GOPHKEEPER_TLS_KEY_FILE
 ```
 
 Auth/sync endpoints are unavailable without a database DSN and a token secret of at least 32 bytes.
+When `tls-cert-file` and `tls-key-file` are set, the server accepts HTTPS directly. The CLI allows `http://` only for localhost/loopback addresses; use `https://` for remote servers.
 
 ## Checks
 
@@ -215,3 +220,4 @@ curl http://localhost:8080/version
 - The server stores encrypted payloads, nonces, payload versions, and revision metadata.
 - Payloads are encrypted with AES-256-GCM and associated data bound to user/item/version context.
 - Refresh tokens are stored server-side as hashes.
+- Auth secrets and tokens must be transported over HTTPS; the client permits plain HTTP only for local loopback development.

@@ -134,7 +134,7 @@ func TestClientPullChangesAllowsLargeResponses(t *testing.T) {
 }
 
 func TestClientSyncRequiresAccessToken(t *testing.T) {
-	client, err := New("http://server.local", nil)
+	client, err := New("http://localhost:8080", nil)
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}

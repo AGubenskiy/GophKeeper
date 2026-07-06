@@ -2,6 +2,7 @@ package serverapp
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -42,6 +43,8 @@ Flags:
   --log-level value          log level: debug, info, warn, or error (default "info")
   --refresh-token-ttl value   refresh token lifetime (default "720h0m0s")
   --shutdown-timeout value   graceful shutdown timeout (default "5s")
+  --tls-cert-file value      TLS certificate file for HTTPS
+  --tls-key-file value       TLS private key file for HTTPS
 
 Environment:
   GOPHKEEPER_ACCESS_TOKEN_SECRET
@@ -51,6 +54,8 @@ Environment:
   GOPHKEEPER_SERVER_ADDRESS
   GOPHKEEPER_SERVER_LOG_LEVEL
   GOPHKEEPER_SERVER_SHUTDOWN_TIMEOUT
+  GOPHKEEPER_TLS_CERT_FILE
+  GOPHKEEPER_TLS_KEY_FILE
 `
 
 const readHeaderTimeout = 5 * time.Second
@@ -61,6 +66,8 @@ type Application struct {
 	shutdownTimeout time.Duration
 	log             *slog.Logger
 	info            buildinfo.Info
+	tlsCertFile     string
+	tlsKeyFile      string
 	closers         []io.Closer
 	closeOnce       sync.Once
 }
@@ -121,6 +128,8 @@ func New(cfg config.Server, log *slog.Logger, info buildinfo.Info, opts ...Optio
 		shutdownTimeout: cfg.ShutdownTimeout,
 		log:             log,
 		info:            info,
+		tlsCertFile:     strings.TrimSpace(cfg.TLSCertFile),
+		tlsKeyFile:      strings.TrimSpace(cfg.TLSKeyFile),
 		closers:         options.closers,
 	}
 }
@@ -138,12 +147,12 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, info buil
 		switch args[0] {
 		case "version":
 			if len(args) != 1 {
-				fmt.Fprintf(stderr, "gk-server version accepts no arguments\n\n")
+				_, _ = fmt.Fprintf(stderr, "gk-server version accepts no arguments\n\n")
 				printUsage(stderr)
 				return 2
 			}
 			if err := info.Print(stdout); err != nil {
-				fmt.Fprintf(stderr, "print version: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "print version: %v\n", err)
 				return 1
 			}
 			return 0
@@ -159,20 +168,20 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, info buil
 			printUsage(stdout)
 			return 0
 		}
-		fmt.Fprintf(stderr, "configure server: %v\n\n", err)
+		_, _ = fmt.Fprintf(stderr, "configure server: %v\n\n", err)
 		printUsage(stderr)
 		return 2
 	}
 
 	log, err := logger.New(stderr, cfg.LogLevel)
 	if err != nil {
-		fmt.Fprintf(stderr, "configure logger: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "configure logger: %v\n", err)
 		return 2
 	}
 
 	services, err := buildRuntimeServices(ctx, cfg)
 	if err != nil {
-		fmt.Fprintf(stderr, "configure services: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "configure services: %v\n", err)
 		return 2
 	}
 
@@ -190,7 +199,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, info buil
 	app := New(cfg, log, info, options...)
 	defer app.Close()
 	if err := app.Start(ctx); err != nil {
-		fmt.Fprintf(stderr, "run server: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "run server: %v\n", err)
 		return 1
 	}
 	return 0
@@ -201,6 +210,14 @@ func (a *Application) Start(ctx context.Context) error {
 	listener, err := net.Listen("tcp", a.server.Addr)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", a.server.Addr, err)
+	}
+	if a.tlsCertFile != "" {
+		tlsConfig, tlsErr := serverTLSConfig(a.tlsCertFile, a.tlsKeyFile)
+		if tlsErr != nil {
+			_ = listener.Close()
+			return tlsErr
+		}
+		listener = tls.NewListener(listener, tlsConfig)
 	}
 	return a.Serve(ctx, listener)
 }
@@ -219,6 +236,7 @@ func (a *Application) Serve(ctx context.Context, listener net.Listener) error {
 	a.log.Info(
 		"server starting",
 		slog.String("address", listener.Addr().String()),
+		slog.Bool("tls", a.tlsCertFile != ""),
 		slog.String("version", a.info.Version),
 		slog.String("build_date", a.info.Date),
 		slog.String("commit", a.info.Commit),
@@ -387,4 +405,15 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func printUsage(w io.Writer) {
 	_, _ = io.WriteString(w, usage)
+}
+
+func serverTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load tls certificate: %w", err)
+	}
+	return &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{certificate},
+	}, nil
 }

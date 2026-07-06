@@ -143,6 +143,8 @@ go run ./cmd/gk --data-dir ./tmp/client sync
 --refresh-token-ttl
 --log-level
 --shutdown-timeout
+--tls-cert-file
+--tls-key-file
 ```
 
 Переменные окружения:
@@ -155,9 +157,12 @@ GOPHKEEPER_ACCESS_TOKEN_TTL
 GOPHKEEPER_REFRESH_TOKEN_TTL
 GOPHKEEPER_SERVER_LOG_LEVEL
 GOPHKEEPER_SERVER_SHUTDOWN_TIMEOUT
+GOPHKEEPER_TLS_CERT_FILE
+GOPHKEEPER_TLS_KEY_FILE
 ```
 
 Auth/sync endpoints недоступны без `database-dsn` и token secret длиной не меньше 32 байт.
+Если заданы `tls-cert-file` и `tls-key-file`, сервер принимает HTTPS напрямую. CLI разрешает `http://` только для localhost/loopback адресов; для удалённых серверов используйте `https://`.
 
 ## Проверки
 
@@ -215,3 +220,4 @@ curl http://localhost:8080/version
 - Сервер хранит encrypted payload, nonce, payload version и revision metadata.
 - Payload шифруется AES-256-GCM с associated data, привязанными к user/item/version context.
 - Refresh tokens хранятся сервером как hashes.
+- Передача auth secret и токенов должна идти по HTTPS; plain HTTP допускается клиентом только для локальной разработки на loopback адресах.

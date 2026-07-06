@@ -3,12 +3,21 @@ package serverapp
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"log/slog"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -238,4 +247,108 @@ func TestApplicationServeStartsAndStops(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Serve did not stop after context cancellation")
 	}
+}
+
+func TestApplicationServeWithTLS(t *testing.T) {
+	certFile, keyFile := writeTestCertificate(t)
+	tlsConfig, err := serverTLSConfig(certFile, keyFile)
+	if err != nil {
+		t.Fatalf("serverTLSConfig returned error: %v", err)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	tlsListener := tls.NewListener(listener, tlsConfig)
+
+	cfg := config.DefaultServer()
+	cfg.Address = listener.Addr().String()
+	cfg.ShutdownTimeout = time.Second
+	cfg.TLSCertFile = certFile
+	cfg.TLSKeyFile = keyFile
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	app := New(cfg, log, buildinfo.New("test", "2026-07-02", "abc123"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- app.Serve(ctx, tlsListener)
+	}()
+
+	client := http.Client{
+		Timeout: 100 * time.Millisecond,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	url := "https://" + listener.Addr().String() + "/healthz"
+	deadline := time.After(2 * time.Second)
+
+	for {
+		response, err := client.Get(url)
+		if err == nil {
+			_ = response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("status code = %d, want %d", response.StatusCode, http.StatusOK)
+			}
+			break
+		}
+
+		select {
+		case <-deadline:
+			cancel()
+			t.Fatalf("TLS server did not become ready: %v", err)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not stop after context cancellation")
+	}
+}
+
+func writeTestCertificate(t *testing.T) (string, string) {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey returned error: %v", err)
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName: "localhost",
+		},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("CreateCertificate returned error: %v", err)
+	}
+
+	dir := t.TempDir()
+	certFile := filepath.Join(dir, "server.crt")
+	keyFile := filepath.Join(dir, "server.key")
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	if err = os.WriteFile(certFile, certPEM, 0o600); err != nil {
+		t.Fatalf("WriteFile cert returned error: %v", err)
+	}
+	if err = os.WriteFile(keyFile, keyPEM, 0o600); err != nil {
+		t.Fatalf("WriteFile key returned error: %v", err)
+	}
+	return certFile, keyFile
 }
