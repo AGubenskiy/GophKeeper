@@ -90,18 +90,14 @@ func syncVault(ctx context.Context, deps dependencies, store clientStore) (syncS
 		summary.conflicts += len(pushResult.Conflicts)
 	}
 
-	changes, err := pullChangesWithSessionRefresh(ctx, deps, store, api, session, profile.LastRevision)
+	pullSummary, finalRevision, err := pullAllChanges(ctx, deps, store, api, session, profile.LastRevision)
 	if err != nil {
 		return syncSummary{}, err
 	}
-	pulled, conflicts, err := applyPulledChanges(ctx, store, changes.Items)
-	if err != nil {
-		return syncSummary{}, err
-	}
-	summary.pulled = pulled
-	summary.conflicts += conflicts
+	summary.pulled = pullSummary.pulled
+	summary.conflicts += pullSummary.conflicts
 
-	profile.LastRevision = changes.CurrentRevision
+	profile.LastRevision = finalRevision
 	profile.UpdatedAt = deps.now().UTC()
 	if err = store.SaveProfile(ctx, profile); err != nil {
 		return syncSummary{}, err
@@ -145,17 +141,59 @@ func pullChangesWithSessionRefresh(
 	api authAPI,
 	session localstore.Session,
 	sinceRevision int64,
-) (clientapi.Changes, error) {
+) (clientapi.Changes, localstore.Session, error) {
 	result, err := api.PullChanges(ctx, session.AccessToken, sinceRevision)
 	if err == nil || !isUnauthorizedAPIError(err) {
-		return result, err
+		return result, session, err
 	}
 
 	session, refreshErr := refreshSession(ctx, deps, store, api, session)
 	if refreshErr != nil {
-		return clientapi.Changes{}, refreshErr
+		return clientapi.Changes{}, session, refreshErr
 	}
-	return api.PullChanges(ctx, session.AccessToken, sinceRevision)
+	result, err = api.PullChanges(ctx, session.AccessToken, sinceRevision)
+	return result, session, err
+}
+
+func pullAllChanges(
+	ctx context.Context,
+	deps dependencies,
+	store clientStore,
+	api authAPI,
+	session localstore.Session,
+	sinceRevision int64,
+) (syncSummary, int64, error) {
+	summary := syncSummary{}
+	finalRevision := sinceRevision
+
+	for {
+		changes, updatedSession, err := pullChangesWithSessionRefresh(ctx, deps, store, api, session, finalRevision)
+		if err != nil {
+			return syncSummary{}, 0, err
+		}
+		session = updatedSession
+
+		pulled, conflicts, err := applyPulledChanges(ctx, store, changes.Items)
+		if err != nil {
+			return syncSummary{}, 0, err
+		}
+		summary.pulled += pulled
+		summary.conflicts += conflicts
+
+		lastReceivedRevision := maxSyncItemRevision(changes.Items)
+		if lastReceivedRevision > finalRevision {
+			finalRevision = lastReceivedRevision
+		}
+		if finalRevision >= changes.CurrentRevision {
+			finalRevision = changes.CurrentRevision
+			return summary, finalRevision, nil
+		}
+		if len(changes.Items) == 0 {
+			// Avoid a retry loop if the server reports a revision that has no visible item changes.
+			finalRevision = changes.CurrentRevision
+			return summary, finalRevision, nil
+		}
+	}
 }
 
 func refreshSession(ctx context.Context, deps dependencies, store clientStore, api authAPI, session localstore.Session) (localstore.Session, error) {
@@ -346,6 +384,16 @@ func localItemFromSync(item clientapi.SyncItem, dirtyState string) (localstore.I
 		DirtyState:       dirtyState,
 		UpdatedAt:        updatedAt.UTC(),
 	}, nil
+}
+
+func maxSyncItemRevision(items []clientapi.SyncItem) int64 {
+	var maxRevision int64
+	for _, item := range items {
+		if item.ServerRevision > maxRevision {
+			maxRevision = item.ServerRevision
+		}
+	}
+	return maxRevision
 }
 
 func cloneTimePtr(value *time.Time) *time.Time {

@@ -394,6 +394,51 @@ func TestSyncPushesDirtyItemsPullsChangesAndUpdatesRevision(t *testing.T) {
 	}
 }
 
+func TestSyncPullsUntilCurrentRevisionIsReached(t *testing.T) {
+	deps, store, api, stdout, stderr := newTestDependencies()
+	store.profile = testProfile(t)
+	store.session = localstore.Session{
+		AccessToken:      "access-token",
+		AccessExpiresAt:  time.Now().Add(time.Minute),
+		RefreshToken:     "refresh-token",
+		RefreshExpiresAt: time.Now().Add(time.Hour),
+	}
+	store.hasProfile = true
+	store.hasSession = true
+	api.pullChanges = []clientapi.Changes{
+		{
+			Items: []clientapi.SyncItem{
+				testSyncItem("remote-1", 1),
+				testSyncItem("remote-2", 2),
+			},
+			CurrentRevision: 3,
+		},
+		{
+			Items: []clientapi.SyncItem{
+				testSyncItem("remote-3", 3),
+			},
+			CurrentRevision: 3,
+		},
+	}
+
+	code := run([]string{"sync"}, deps)
+	if code != 0 {
+		t.Fatalf("sync exit code = %d, want 0; stderr: %s", code, stderr.String())
+	}
+	if len(api.pullSinceValues) != 2 || api.pullSinceValues[0] != 0 || api.pullSinceValues[1] != 2 {
+		t.Fatalf("pull since values = %v, want [0 2]", api.pullSinceValues)
+	}
+	if store.profile.LastRevision != 3 {
+		t.Fatalf("LastRevision = %d, want 3", store.profile.LastRevision)
+	}
+	if len(store.items) != 3 {
+		t.Fatalf("stored item count = %d, want 3", len(store.items))
+	}
+	if !strings.Contains(stdout.String(), "Sync complete: pushed 0, pulled 3, conflicts 0") {
+		t.Fatalf("stdout = %q, want all pulled items in summary", stdout.String())
+	}
+}
+
 func TestSyncRefreshesExpiredAccessTokenBeforeRequests(t *testing.T) {
 	deps, store, api, _, stderr := newTestDependencies()
 	now := deps.now()
@@ -748,6 +793,17 @@ func decodeBase64(t *testing.T, value string) []byte {
 	return decoded
 }
 
+func testSyncItem(id string, revision int64) clientapi.SyncItem {
+	return clientapi.SyncItem{
+		ID:               id,
+		ServerRevision:   revision,
+		EncryptedPayload: base64.StdEncoding.EncodeToString([]byte(id + "-ciphertext")),
+		PayloadNonce:     base64.StdEncoding.EncodeToString([]byte(id + "-nonce")),
+		PayloadVersion:   1,
+		UpdatedAt:        time.Date(2026, 7, 3, 10, int(revision), 0, 0, time.UTC),
+	}
+}
+
 type fakePrompter struct {
 	secret  []byte
 	secrets [][]byte
@@ -780,7 +836,9 @@ type fakeAPI struct {
 	pullToken       string
 	pullTokens      []string
 	pullSince       int64
+	pullSinceValues []int64
 	changes         clientapi.Changes
+	pullChanges     []clientapi.Changes
 	pullErrors      []error
 }
 
@@ -827,10 +885,16 @@ func (a *fakeAPI) PullChanges(_ context.Context, accessToken string, sinceRevisi
 	a.pullToken = accessToken
 	a.pullTokens = append(a.pullTokens, accessToken)
 	a.pullSince = sinceRevision
+	a.pullSinceValues = append(a.pullSinceValues, sinceRevision)
 	if len(a.pullErrors) > 0 {
 		err := a.pullErrors[0]
 		a.pullErrors = a.pullErrors[1:]
 		return clientapi.Changes{}, err
+	}
+	if len(a.pullChanges) > 0 {
+		changes := a.pullChanges[0]
+		a.pullChanges = a.pullChanges[1:]
+		return changes, nil
 	}
 	return a.changes, nil
 }
