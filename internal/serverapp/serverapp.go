@@ -308,6 +308,7 @@ func NewHandlerWithAuth(info buildinfo.Info, authService httpapi.AuthService, sy
 		}
 		writeJSON(w, http.StatusOK, info)
 	})
+	mux.HandleFunc("/favicon.ico", handleFavicon)
 
 	httpapi.NewAuthHandler(authService).RegisterRoutes(mux)
 	httpapi.NewSyncHandler(syncService, verifier).RegisterRoutes(mux)
