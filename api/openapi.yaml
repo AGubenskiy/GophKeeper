@@ -2,9 +2,11 @@ openapi: 3.0.3
 info:
   title: GophKeeper API
   version: 0.1.0
-  description: HTTP API for the GophKeeper password manager project.
+  description: HTTPS API for the GophKeeper password manager project.
 servers:
+  - url: https://localhost:8080
   - url: http://localhost:8080
+    description: Local loopback development only.
 paths:
   /healthz:
     get:

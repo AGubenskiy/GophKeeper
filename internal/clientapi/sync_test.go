@@ -1,6 +1,7 @@
 package clientapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -94,8 +95,46 @@ func TestClientPushAndPullChanges(t *testing.T) {
 	}
 }
 
+func TestClientPullChangesAllowsLargeResponses(t *testing.T) {
+	updatedAt := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
+	largePayload := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("x"), 4<<20))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/sync/changes" {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSON(t, w, http.StatusOK, Changes{
+			Items: []SyncItem{
+				{
+					ID:               "large-file",
+					ServerRevision:   1,
+					EncryptedPayload: largePayload,
+					PayloadNonce:     base64.StdEncoding.EncodeToString([]byte("nonce")),
+					PayloadVersion:   1,
+					UpdatedAt:        updatedAt,
+				},
+			},
+			CurrentRevision: 1,
+		})
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, server.Client())
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	changes, err := client.PullChanges(context.Background(), "access-token", 0)
+	if err != nil {
+		t.Fatalf("PullChanges returned error: %v", err)
+	}
+	if len(changes.Items) != 1 || changes.Items[0].EncryptedPayload != largePayload {
+		t.Fatalf("PullChanges returned payload length %d, want %d", len(changes.Items[0].EncryptedPayload), len(largePayload))
+	}
+}
+
 func TestClientSyncRequiresAccessToken(t *testing.T) {
-	client, err := New("http://server.local", nil)
+	client, err := New("http://localhost:8080", nil)
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}

@@ -14,9 +14,10 @@ import (
 	"time"
 
 	"github.com/AGubenskiy/GophKeeper/internal/cryptoutil"
+	"github.com/AGubenskiy/GophKeeper/internal/netutil"
 )
 
-const maxResponseBytes = 4 << 20
+const maxResponseBytes = 128 << 20
 
 // Error describes an error returned by the GophKeeper HTTP API.
 type Error struct {
@@ -56,6 +57,9 @@ func New(serverURL string, httpClient *http.Client) (*Client, error) {
 	}
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return nil, errors.New("server url must include scheme and host")
+	}
+	if err = netutil.ValidateServerTransport(parsed); err != nil {
+		return nil, err
 	}
 	parsed.Path = strings.TrimRight(parsed.Path, "/")
 

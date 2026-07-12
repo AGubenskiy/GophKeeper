@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - "**"
   pull_request:
   workflow_dispatch:
 
@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: go.mod
           cache: true
@@ -36,10 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: go.mod
           cache: true
@@ -49,7 +49,7 @@ jobs:
         run: ./scripts/build-release.ps1 -Version "${{ github.ref_name }}" -Commit "${{ github.sha }}" -DistDir dist -Clean
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: gophkeeper-${{ github.sha }}
           path: dist/

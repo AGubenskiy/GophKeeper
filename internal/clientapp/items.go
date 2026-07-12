@@ -61,6 +61,8 @@ type unlockedVault struct {
 	key     []byte
 }
 
+const defaultFileItemMaxBytes int64 = 64 << 20
+
 func newAddCommand(deps dependencies, rootOpts *rootOptions) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "add",
@@ -194,9 +196,9 @@ func newAddFileCommand(deps dependencies, rootOpts *rootOptions) *cobra.Command 
 				return errors.New("--path is required")
 			}
 
-			content, err := os.ReadFile(opts.path)
+			content, err := readFileItemContent(opts.path, deps.fileItemMaxBytes)
 			if err != nil {
-				return fmt.Errorf("read file: %w", err)
+				return err
 			}
 			metadata, err := parseMetadata(opts.metadata)
 			if err != nil {
@@ -649,9 +651,9 @@ func applyPayloadEdit(cmd *cobra.Command, deps dependencies, payload *vaultitem.
 		}
 	case vaultitem.KindFile:
 		if cmd.Flags().Changed("path") {
-			content, err := os.ReadFile(opts.path)
+			content, err := readFileItemContent(opts.path, deps.fileItemMaxBytes)
 			if err != nil {
-				return false, fmt.Errorf("read file: %w", err)
+				return false, err
 			}
 			payload.Fields[vaultitem.FieldFileName] = filepath.Base(opts.path)
 			payload.Fields[vaultitem.FieldFileDataBase64] = base64.StdEncoding.EncodeToString(content)
@@ -762,6 +764,39 @@ func resolveMediaType(path, explicit string) string {
 		return detected
 	}
 	return "application/octet-stream"
+}
+
+func readFileItemContent(path string, maxBytes int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("read file metadata: %w", err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("read file: %s is a directory", path)
+	}
+	if maxBytes <= 0 {
+		maxBytes = defaultFileItemMaxBytes
+	}
+	if info.Size() > maxBytes {
+		return nil, fmt.Errorf("file is too large: %d bytes exceeds maximum %d bytes", info.Size(), maxBytes)
+	}
+
+	content, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+	if int64(len(content)) > maxBytes {
+		return nil, fmt.Errorf("file is too large: exceeds maximum %d bytes", maxBytes)
+	}
+	return content, nil
 }
 
 func maskCardNumber(number string) string {

@@ -13,7 +13,8 @@ import (
 	"github.com/AGubenskiy/GophKeeper/internal/cryptoutil"
 )
 
-const maxJSONBodyBytes = 1 << 20
+const maxAuthJSONBodyBytes = 1 << 20
+const maxSyncJSONBodyBytes = 128 << 20
 
 // AuthService is the auth use-case surface required by HTTP handlers.
 type AuthService interface {
@@ -146,7 +147,11 @@ func (h *AuthHandler) available(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func decodeJSONRequest(w http.ResponseWriter, r *http.Request, target any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	return decodeJSONRequestWithLimit(w, r, target, maxAuthJSONBodyBytes)
+}
+
+func decodeJSONRequestWithLimit(w http.ResponseWriter, r *http.Request, target any, maxBodyBytes int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {

@@ -41,6 +41,7 @@ type dependencies struct {
 	newClientID      func() string
 	newItemID        func() string
 	now              func() time.Time
+	fileItemMaxBytes int64
 }
 
 type clientStore interface {
@@ -108,7 +109,8 @@ func defaultDependencies(stdout, stderr io.Writer, info buildinfo.Info) dependen
 		newItemID: func() string {
 			return uuid.NewString()
 		},
-		now: time.Now,
+		now:              time.Now,
+		fileItemMaxBytes: defaultFileItemMaxBytes,
 	}
 }
 

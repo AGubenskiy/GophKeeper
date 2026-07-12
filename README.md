@@ -26,6 +26,7 @@ GophKeeper - менеджер секретов с CLI-клиентом и HTTP-�
 
 Создайте пустую PostgreSQL-базу, например `gophkeeper_demo`, и запустите сервер:
 
+
 ```powershell
 $env:GOPHKEEPER_DATABASE_DSN='postgres://user:password@localhost:5432/gophkeeper_demo?sslmode=disable'
 $env:GOPHKEEPER_ACCESS_TOKEN_SECRET='12345678901234567890123456789012'
@@ -85,6 +86,7 @@ gk conflict keep-remote ITEM_ID
 ```
 
 Локальная SQLite-база клиента по умолчанию хранится в пользовательской config-директории. Для изолированного профиля используйте `--data-dir`.
+Файловые записи поддерживают бинарные данные размером до 64 MiB на один item.
 
 ## Синхронизация
 
@@ -142,6 +144,8 @@ go run ./cmd/gk --data-dir ./tmp/client sync
 --refresh-token-ttl
 --log-level
 --shutdown-timeout
+--tls-cert-file
+--tls-key-file
 ```
 
 Переменные окружения:
@@ -154,9 +158,12 @@ GOPHKEEPER_ACCESS_TOKEN_TTL
 GOPHKEEPER_REFRESH_TOKEN_TTL
 GOPHKEEPER_SERVER_LOG_LEVEL
 GOPHKEEPER_SERVER_SHUTDOWN_TIMEOUT
+GOPHKEEPER_TLS_CERT_FILE
+GOPHKEEPER_TLS_KEY_FILE
 ```
 
 Auth/sync endpoints недоступны без `database-dsn` и token secret длиной не меньше 32 байт.
+Если заданы `tls-cert-file` и `tls-key-file`, сервер принимает HTTPS напрямую. CLI разрешает `http://` только для localhost/loopback адресов; для удалённых серверов используйте `https://`.
 
 ## Проверки
 
@@ -198,6 +205,22 @@ go build ./cmd/gk ./cmd/gk-server
 
 Скрипт собирает `gk` и `gk-server` для Windows amd64, Linux amd64, macOS amd64 и macOS arm64, добавляет build metadata и пишет SHA256 checksums в `dist/checksums.txt`.
 
+Упаковать release artifacts локально:
+
+```powershell
+.\scripts\package-release.ps1 -Version v0.1.0 -DistDir dist -OutDir release -Clean
+```
+
+GitHub Release создается автоматически при push тега `v*`:
+
+
+```bash
+git tag -a v0.1.0 -m "GophKeeper v0.1.0"
+git push origin v0.1.0
+```
+
+Workflow запускает quality gate, собирает бинарники, упаковывает архивы для Windows/Linux/macOS и публикует release с `checksums.txt`.
+
 Проверить build metadata:
 
 ```bash
@@ -214,3 +237,4 @@ curl http://localhost:8080/version
 - Сервер хранит encrypted payload, nonce, payload version и revision metadata.
 - Payload шифруется AES-256-GCM с associated data, привязанными к user/item/version context.
 - Refresh tokens хранятся сервером как hashes.
+- Передача auth secret и токенов должна идти по HTTPS; plain HTTP допускается клиентом только для локальной разработки на loopback адресах.

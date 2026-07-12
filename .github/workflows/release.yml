@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Quality checks
+        shell: pwsh
+        run: ./scripts/check-quality.ps1 -InstallTools -Race -CoverageThreshold 70
+
+      - name: Build release binaries
+        shell: pwsh
+        run: ./scripts/build-release.ps1 -Version "${{ github.ref_name }}" -Commit "${{ github.sha }}" -DistDir dist -Clean
+
+      - name: Package release artifacts
+        shell: pwsh
+        run: ./scripts/package-release.ps1 -Version "${{ github.ref_name }}" -DistDir dist -OutDir release -Clean
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: gophkeeper-${{ github.ref_name }}
+          path: release/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: GophKeeper ${{ github.ref_name }}
+          files: release/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

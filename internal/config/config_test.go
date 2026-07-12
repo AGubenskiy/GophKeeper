@@ -34,6 +34,9 @@ func TestParseServerDefaults(t *testing.T) {
 	if cfg.ShutdownTimeout != DefaultServerShutdownTimeout {
 		t.Fatalf("ShutdownTimeout = %s, want %s", cfg.ShutdownTimeout, DefaultServerShutdownTimeout)
 	}
+	if cfg.TLSCertFile != "" || cfg.TLSKeyFile != "" {
+		t.Fatalf("TLS files = %q/%q, want empty", cfg.TLSCertFile, cfg.TLSKeyFile)
+	}
 }
 
 func TestParseServerFlags(t *testing.T) {
@@ -45,6 +48,8 @@ func TestParseServerFlags(t *testing.T) {
 		"--log-level", "debug",
 		"--refresh-token-ttl", "24h",
 		"--shutdown-timeout", "2s",
+		"--tls-cert-file", "server.crt",
+		"--tls-key-file", "server.key",
 	}, nil)
 	if err != nil {
 		t.Fatalf("ParseServer returned error: %v", err)
@@ -71,6 +76,9 @@ func TestParseServerFlags(t *testing.T) {
 	if cfg.ShutdownTimeout != 2*time.Second {
 		t.Fatalf("ShutdownTimeout = %s, want 2s", cfg.ShutdownTimeout)
 	}
+	if cfg.TLSCertFile != "server.crt" || cfg.TLSKeyFile != "server.key" {
+		t.Fatalf("TLS files = %q/%q, want custom files", cfg.TLSCertFile, cfg.TLSKeyFile)
+	}
 }
 
 func TestParseServerEnvOverridesFlags(t *testing.T) {
@@ -82,6 +90,8 @@ func TestParseServerEnvOverridesFlags(t *testing.T) {
 		EnvServerAddress:         "localhost:9191",
 		EnvServerLogLevel:        "warn",
 		EnvServerShutdownTimeout: "3s",
+		EnvTLSCertFile:           "env.crt",
+		EnvTLSKeyFile:            "env.key",
 	}
 
 	cfg, err := ParseServer([]string{
@@ -92,6 +102,8 @@ func TestParseServerEnvOverridesFlags(t *testing.T) {
 		"--log-level", "debug",
 		"--refresh-token-ttl", "24h",
 		"--shutdown-timeout", "2s",
+		"--tls-cert-file", "flag.crt",
+		"--tls-key-file", "flag.key",
 	}, mapLookup(env))
 	if err != nil {
 		t.Fatalf("ParseServer returned error: %v", err)
@@ -117,6 +129,9 @@ func TestParseServerEnvOverridesFlags(t *testing.T) {
 	}
 	if cfg.ShutdownTimeout != 3*time.Second {
 		t.Fatalf("ShutdownTimeout = %s, want 3s", cfg.ShutdownTimeout)
+	}
+	if cfg.TLSCertFile != "env.crt" || cfg.TLSKeyFile != "env.key" {
+		t.Fatalf("TLS files = %q/%q, want env files", cfg.TLSCertFile, cfg.TLSKeyFile)
 	}
 }
 
@@ -189,6 +204,15 @@ func TestServerValidateRejectsNonPositiveTokenTTL(t *testing.T) {
 	cfg.RefreshTokenTTL = 0
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate returned nil for refresh ttl, want error")
+	}
+}
+
+func TestServerValidateRejectsIncompleteTLSConfig(t *testing.T) {
+	cfg := DefaultServer()
+	cfg.TLSCertFile = "server.crt"
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate returned nil for incomplete TLS config, want error")
 	}
 }
 

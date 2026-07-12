@@ -85,6 +85,7 @@ gk conflict keep-remote ITEM_ID
 ```
 
 The local client SQLite database is stored under the user's config directory by default. Use `--data-dir` for an isolated profile.
+File records support binary data up to 64 MiB per item.
 
 ## Synchronization
 
@@ -142,6 +143,8 @@ Flags:
 --refresh-token-ttl
 --log-level
 --shutdown-timeout
+--tls-cert-file
+--tls-key-file
 ```
 
 Environment variables:
@@ -154,9 +157,12 @@ GOPHKEEPER_ACCESS_TOKEN_TTL
 GOPHKEEPER_REFRESH_TOKEN_TTL
 GOPHKEEPER_SERVER_LOG_LEVEL
 GOPHKEEPER_SERVER_SHUTDOWN_TIMEOUT
+GOPHKEEPER_TLS_CERT_FILE
+GOPHKEEPER_TLS_KEY_FILE
 ```
 
 Auth/sync endpoints are unavailable without a database DSN and a token secret of at least 32 bytes.
+When `tls-cert-file` and `tls-key-file` are set, the server accepts HTTPS directly. The CLI allows `http://` only for localhost/loopback addresses; use `https://` for remote servers.
 
 ## Checks
 
@@ -198,6 +204,21 @@ Build release artifacts:
 
 The script builds `gk` and `gk-server` for Windows amd64, Linux amd64, macOS amd64, and macOS arm64, injects build metadata, and writes SHA256 checksums to `dist/checksums.txt`.
 
+Package release artifacts locally:
+
+```powershell
+.\scripts\package-release.ps1 -Version v0.1.0 -DistDir dist -OutDir release -Clean
+```
+
+GitHub Release is created automatically when a `v*` tag is pushed:
+
+```bash
+git tag -a v0.1.0 -m "GophKeeper v0.1.0"
+git push origin v0.1.0
+```
+
+The workflow runs the quality gate, builds binaries, packages Windows/Linux/macOS archives, and publishes the release with `checksums.txt`.
+
 Check build metadata:
 
 ```bash
@@ -214,3 +235,4 @@ curl http://localhost:8080/version
 - The server stores encrypted payloads, nonces, payload versions, and revision metadata.
 - Payloads are encrypted with AES-256-GCM and associated data bound to user/item/version context.
 - Refresh tokens are stored server-side as hashes.
+- Auth secrets and tokens must be transported over HTTPS; the client permits plain HTTP only for local loopback development.

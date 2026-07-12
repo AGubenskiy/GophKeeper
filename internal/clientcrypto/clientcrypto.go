@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/AGubenskiy/GophKeeper/internal/cryptoutil"
+	"github.com/AGubenskiy/GophKeeper/internal/netutil"
 )
 
 const authSecretPurpose = "gophkeeper-client-auth-secret-v1"
@@ -59,6 +60,9 @@ func normalizeServerURL(rawURL string) (string, error) {
 	}
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("server url must include scheme and host")
+	}
+	if err := netutil.ValidateServerTransport(parsed); err != nil {
+		return "", err
 	}
 	parsed.Path = strings.TrimRight(parsed.Path, "/")
 	parsed.RawQuery = ""
