@@ -1,2 +1,2 @@
-// Package netutil contains shared network validation helpers.
+// Package netutil contains shared network validation helpers
 package netutil
