@@ -61,7 +61,7 @@ type unlockedVault struct {
 	key     []byte
 }
 
-var maxFileItemBytes int64 = 64 << 20
+const defaultFileItemMaxBytes int64 = 64 << 20
 
 func newAddCommand(deps dependencies, rootOpts *rootOptions) *cobra.Command {
 	command := &cobra.Command{
@@ -196,7 +196,7 @@ func newAddFileCommand(deps dependencies, rootOpts *rootOptions) *cobra.Command 
 				return errors.New("--path is required")
 			}
 
-			content, err := readFileItemContent(opts.path)
+			content, err := readFileItemContent(opts.path, deps.fileItemMaxBytes)
 			if err != nil {
 				return err
 			}
@@ -651,7 +651,7 @@ func applyPayloadEdit(cmd *cobra.Command, deps dependencies, payload *vaultitem.
 		}
 	case vaultitem.KindFile:
 		if cmd.Flags().Changed("path") {
-			content, err := readFileItemContent(opts.path)
+			content, err := readFileItemContent(opts.path, deps.fileItemMaxBytes)
 			if err != nil {
 				return false, err
 			}
@@ -766,21 +766,35 @@ func resolveMediaType(path, explicit string) string {
 	return "application/octet-stream"
 }
 
-func readFileItemContent(path string) ([]byte, error) {
-	info, err := os.Stat(path)
+func readFileItemContent(path string, maxBytes int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	info, err := file.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("read file metadata: %w", err)
 	}
 	if info.IsDir() {
 		return nil, fmt.Errorf("read file: %s is a directory", path)
 	}
-	if info.Size() > maxFileItemBytes {
-		return nil, fmt.Errorf("file is too large: %d bytes exceeds maximum %d bytes", info.Size(), maxFileItemBytes)
+	if maxBytes <= 0 {
+		maxBytes = defaultFileItemMaxBytes
+	}
+	if info.Size() > maxBytes {
+		return nil, fmt.Errorf("file is too large: %d bytes exceeds maximum %d bytes", info.Size(), maxBytes)
 	}
 
-	content, err := os.ReadFile(path)
+	content, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
+	}
+	if int64(len(content)) > maxBytes {
+		return nil, fmt.Errorf("file is too large: exceeds maximum %d bytes", maxBytes)
 	}
 	return content, nil
 }

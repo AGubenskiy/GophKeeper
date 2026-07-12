@@ -148,8 +148,6 @@ func ParseServer(args []string, lookup EnvLookup) (Server, error) {
 	if value, ok := lookupNonEmpty(lookup, EnvTLSKeyFile); ok {
 		cfg.TLSKeyFile = value
 	}
-	cfg.TLSCertFile = strings.TrimSpace(cfg.TLSCertFile)
-	cfg.TLSKeyFile = strings.TrimSpace(cfg.TLSKeyFile)
 
 	if err := cfg.Validate(); err != nil {
 		return Server{}, err
@@ -171,8 +169,13 @@ func (c Server) Validate() error {
 	if c.ShutdownTimeout <= 0 {
 		return errors.New("shutdown timeout must be positive")
 	}
-	if (strings.TrimSpace(c.TLSCertFile) == "") != (strings.TrimSpace(c.TLSKeyFile) == "") {
-		return errors.New("tls cert file and tls key file must be provided together")
+	tlsCertFile := strings.TrimSpace(c.TLSCertFile)
+	tlsKeyFile := strings.TrimSpace(c.TLSKeyFile)
+	if tlsCertFile != "" && tlsKeyFile == "" {
+		return errors.New("tls key file is required when tls cert file is provided")
+	}
+	if tlsCertFile == "" && tlsKeyFile != "" {
+		return errors.New("tls cert file is required when tls key file is provided")
 	}
 	return nil
 }

@@ -146,6 +146,7 @@ func (c *integrationClient) run(t *testing.T, args ...string) string {
 		now: func() time.Time {
 			return time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
 		},
+		fileItemMaxBytes: defaultFileItemMaxBytes,
 	}
 
 	fullArgs := append([]string{"--data-dir", c.dataDir}, args...)

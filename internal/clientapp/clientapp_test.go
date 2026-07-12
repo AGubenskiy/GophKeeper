@@ -324,11 +324,7 @@ func TestAddAndShowTextCardAndFileItems(t *testing.T) {
 
 func TestAddFileRejectsTooLargeFile(t *testing.T) {
 	deps, _, _, _, stderr := newTestDependencies()
-	oldMax := maxFileItemBytes
-	maxFileItemBytes = 4
-	defer func() {
-		maxFileItemBytes = oldMax
-	}()
+	deps.fileItemMaxBytes = 4
 
 	filePath := filepath.Join(t.TempDir(), "large.bin")
 	if err := os.WriteFile(filePath, []byte("12345"), 0o600); err != nil {
@@ -751,6 +747,7 @@ func newTestDependencies() (dependencies, *fakeStore, *fakeAPI, *bytes.Buffer, *
 		now: func() time.Time {
 			return time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
 		},
+		fileItemMaxBytes: defaultFileItemMaxBytes,
 	}
 
 	return deps, store, api, &stdout, &stderr

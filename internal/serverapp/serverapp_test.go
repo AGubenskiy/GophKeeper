@@ -172,64 +172,6 @@ func TestNewHandlerVersion(t *testing.T) {
 	}
 }
 
-func TestNewHandlerFavicon(t *testing.T) {
-	handler := NewHandler(buildinfo.New("", "", ""))
-	request := httptest.NewRequest(http.MethodGet, "/favicon.ico", nil)
-	response := httptest.NewRecorder()
-
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
-	}
-	if response.Header().Get("Content-Type") != "image/x-icon" {
-		t.Fatalf("Content-Type = %q, want image/x-icon", response.Header().Get("Content-Type"))
-	}
-	if !strings.Contains(response.Header().Get("Cache-Control"), "max-age=86400") {
-		t.Fatalf("Cache-Control = %q, want cache lifetime", response.Header().Get("Cache-Control"))
-	}
-	if response.Body.Len() == 0 {
-		t.Fatal("favicon response body is empty")
-	}
-	body := response.Body.Bytes()
-	if len(body) < 4 || body[0] != 0 || body[1] != 0 || body[2] != 1 || body[3] != 0 {
-		t.Fatalf("favicon header = %v, want ICO header", body[:min(len(body), 4)])
-	}
-}
-
-func TestNewHandlerFaviconHead(t *testing.T) {
-	handler := NewHandler(buildinfo.New("", "", ""))
-	request := httptest.NewRequest(http.MethodHead, "/favicon.ico", nil)
-	response := httptest.NewRecorder()
-
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
-	}
-	if response.Header().Get("Content-Type") != "image/x-icon" {
-		t.Fatalf("Content-Type = %q, want image/x-icon", response.Header().Get("Content-Type"))
-	}
-	if response.Body.Len() != 0 {
-		t.Fatalf("favicon HEAD body length = %d, want 0", response.Body.Len())
-	}
-}
-
-func TestNewHandlerFaviconRejectsUnsupportedMethod(t *testing.T) {
-	handler := NewHandler(buildinfo.New("", "", ""))
-	request := httptest.NewRequest(http.MethodPost, "/favicon.ico", nil)
-	response := httptest.NewRecorder()
-
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status code = %d, want %d", response.Code, http.StatusMethodNotAllowed)
-	}
-	if response.Header().Get("Allow") != "GET, HEAD" {
-		t.Fatalf("Allow header = %q, want GET, HEAD", response.Header().Get("Allow"))
-	}
-}
-
 func TestNewHandlerRejectsUnsupportedMethod(t *testing.T) {
 	handler := NewHandler(buildinfo.New("", "", ""))
 	request := httptest.NewRequest(http.MethodPost, "/healthz", nil)

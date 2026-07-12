@@ -8,13 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/AGubenskiy/GophKeeper/internal/cryptoutil"
+	"github.com/AGubenskiy/GophKeeper/internal/netutil"
 )
 
 const maxResponseBytes = 128 << 20
@@ -58,7 +58,7 @@ func New(serverURL string, httpClient *http.Client) (*Client, error) {
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return nil, errors.New("server url must include scheme and host")
 	}
-	if err = validateServerTransport(parsed); err != nil {
+	if err = netutil.ValidateServerTransport(parsed); err != nil {
 		return nil, err
 	}
 	parsed.Path = strings.TrimRight(parsed.Path, "/")
@@ -71,29 +71,6 @@ func New(serverURL string, httpClient *http.Client) (*Client, error) {
 		baseURL:    parsed,
 		httpClient: httpClient,
 	}, nil
-}
-
-func validateServerTransport(parsed *url.URL) error {
-	switch strings.ToLower(parsed.Scheme) {
-	case "https":
-		return nil
-	case "http":
-		if isLoopbackHost(parsed.Hostname()) {
-			return nil
-		}
-		return errors.New("server url must use https outside localhost")
-	default:
-		return errors.New("server url must use http or https")
-	}
-}
-
-func isLoopbackHost(host string) bool {
-	host = strings.Trim(strings.ToLower(strings.TrimSpace(host)), "[]")
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }
 
 // AuthParams fetches KDF parameters and salts for login.
